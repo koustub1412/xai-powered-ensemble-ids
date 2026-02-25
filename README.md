@@ -1,21 +1,214 @@
-# 🛡️ Hybrid AI-Driven Intrusion Detection System (IDS)
+# 🔐 XAI-Powered Ensemble Intrusion Detection System for IoT
 
-A sophisticated Intrusion Detection System designed for IoT and IT environments using a **Heterogeneous Stacked Ensemble** architecture.
+## 📌 Overview
 
-## 🚀 Project Highlights
-- **Hybrid Stacking:** Combines Scikit-Learn (KNN, RF, DT, LR) base models with a **Keras Deep Neural Network** meta-learner.
-- **Context-Aware:** Auto-routes traffic between **NSL-KDD** (IT), **ToN-IoT** (Sensors), and **BoT-IoT** (Smart Home) expert models.
-- **Explainable AI (XAI):** Integrated SHAP forensic analysis to provide human-readable justifications for every alert.
-- **Real-Time Dashboard:** React-based SOC dashboard with MongoDB logging.
+The rapid growth of the **Internet of Things (IoT)** has connected billions of smart devices across healthcare, industries, transportation, and smart cities. While this connectivity enhances automation and efficiency, it also significantly increases vulnerability to cyberattacks.
 
-## 📁 Project Structure
-- `/backend`: FastAPI server logic.
-- `/frontend`: React dashboard source code.
-- `/notebooks`: Data preprocessing and model training pipeline.
-- `/outputs`: Saved `.keras` and `.pkl` artifacts.
-- `/src`: Core prediction and analyzer modules.
+This project presents an **Explainable Ensemble Machine Learning Framework for Intrusion Detection in IoT**, combining:
 
-## 🛠️ Setup
-1. `pip install -r requirements.txt`
-2. Run Backend: `uvicorn backend.main:app --reload`
-3. Run Frontend: `npm install && npm start`
+- 🧠 Stacked Ensemble Learning  
+- 🔎 Explainable AI (XAI) using SHAP  
+- 🌐 Multi-dataset evaluation  
+- 💻 Full-stack deployment (FastAPI + React)  
+
+The system not only detects intrusions but also explains *why* a network instance is classified as malicious.
+
+---
+
+## 🚨 Problem Statement
+
+Traditional Intrusion Detection Systems (IDS):
+
+- ❌ Cannot detect zero-day attacks (signature-based IDS)
+- ❌ Produce high false positives (anomaly-based IDS)
+- ❌ Lack interpretability (black-box ML models)
+- ❌ Suffer from bias–variance issues (single classifiers)
+
+There is a need for a:
+
+✔ Robust  
+✔ Accurate  
+✔ Explainable  
+✔ IoT-compatible  
+
+Intrusion Detection Framework.
+
+---
+
+## 🧠 Proposed Architecture
+
+### 🔹 Level-1 (Base Learners)
+- K-Nearest Neighbors (KNN)
+- Decision Tree (DT)
+- Logistic Regression (LR)
+- Random Forest (RF)
+
+### 🔹 Level-2 (Meta Learner)
+- Multilayer Perceptron (MLP)
+
+This **stacking ensemble architecture** improves:
+
+- Detection accuracy  
+- Model stability  
+- Generalization across datasets  
+
+---
+
+## 🔍 Explainable AI (XAI)
+
+To eliminate black-box behavior, SHAP-based explainability is integrated:
+
+- Feature contribution analysis  
+- Human-readable forensic reports  
+- Class probability breakdown  
+- Risk-level categorization  
+
+The system explains:
+
+- What attack was detected  
+- Why it was detected  
+- Which features influenced the decision  
+
+---
+
+## 📊 Datasets Used
+
+The system is evaluated on benchmark intrusion datasets:
+
+- **NSL-KDD**
+- **ToN-IoT**
+- **BoT-IoT**
+
+It also supports CSV upload for custom dataset testing.
+
+---
+
+## 📈 Performance Highlights
+
+The ensemble model achieves:
+
+- ~98%+ Accuracy (NSL-KDD benchmark reference)
+- High MCC score
+- High F1-score stability
+- Low Log Loss
+- Reduced false positives
+
+The stacking ensemble outperforms individual ML classifiers.
+
+---
+
+## 🖥️ System Features
+
+### 🔹 Functional Features
+
+- Upload IoT datasets (CSV)
+- Real-time traffic injection simulation
+- Multi-class attack detection
+- Risk categorization (LOW / MEDIUM / HIGH / CRITICAL)
+- SHAP-based explainability
+- SOC-style dashboard visualization
+- Historical traffic log storage
+
+### 🔹 Non-Functional Features
+
+- Scalable backend architecture
+- Modular ML design
+- Lightweight inference
+- IoT-compatible processing
+- Research extensibility
+
+---
+
+## 🏗️ Tech Stack
+
+### Backend
+- Python
+- FastAPI
+- Scikit-learn
+- SHAP
+- NumPy / Pandas
+
+### Frontend
+- React (Vite)
+- Chart.js / Recharts
+- Modern SOC-style UI
+
+### Database
+- MongoDB (traffic logs & history storage)
+
+---
+
+## 📂 Project Structure
+```
+xai-powered-ensemble-ids/
+│
+├── backend/
+│ ├── app.py
+│ ├── model_loader.py
+│ ├── requirements.txt
+│
+├── frontend/
+│ ├── src/
+│ ├── package.json
+│
+├── README.md
+└── .gitignore
+```
+
+---
+
+## 🚀 How to Run
+
+### 1️⃣ Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn app:app --reload
+```
+Backend runs on: http://127.0.0.1:8000
+
+### 2️⃣ Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Frontend runs on:http://localhost:5173
+
+## 🎯 Applications
+
+- Smart Home Security
+
+- Industrial IoT Protection
+
+- Healthcare IoT (IoMT)
+
+- Smart City Infrastructure
+
+- IoT Edge Deployment
+
+- Cybersecurity Research
+
+## 🧪 Research Contribution
+
+This project contributes by:
+
+- Integrating stacking ensemble + Explainable AI
+
+- Supporting multiple IoT datasets
+
+- Providing deployment-ready architecture
+
+- Delivering transparent forensic insights
+
+- Reducing false positives while maintaining high accuracy
+
+## 👨‍💻 Authors
+
+- Koustub Maktal
+
+- Rigved Katukam
+
+- Ladella Sirivalli
