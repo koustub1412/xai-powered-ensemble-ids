@@ -1,0 +1,23 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Data files
+data/
+outputs/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Model files
+*.pkl
+*.keras
+*.h5
+*.npy
+
+# OS files
+.DS_Store
+Thumbs.db

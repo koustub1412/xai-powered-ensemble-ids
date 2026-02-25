@@ -1,0 +1,24 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body, html {
+  width: 100vw;
+  min-height: 100vh;
+  background-color: #0f172a;
+  font-family: system-ui, sans-serif;
+  overflow-x: hidden; /* Prevents an ugly horizontal scrollbar */
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex; /* This is the magic property that fixes the squish */
+}
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
