@@ -21,3 +21,6 @@ outputs/
 # OS files
 .DS_Store
 Thumbs.db
+# Environment variables
+.env
+backend/.env
