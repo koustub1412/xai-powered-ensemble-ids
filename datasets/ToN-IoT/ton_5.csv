@@ -1,0 +1,6 @@
+duration,src_bytes,dst_bytes,missed_bytes,src_pkts,src_ip_bytes,dst_pkts,dst_ip_bytes,dns_qclass,dns_qtype,dns_rcode,proto,conn_state,dns_query,dns_AA,dns_RD,dns_RA
+3.0,1000,500,0,5,1500,4,1200,1,1,0,tcp,REJ,local,F,T,T
+3.0,1000,500,0,5,1500,4,1200,1,1,0,tcp,REJ,local,F,T,T
+0.05,99999,1,0,12,100000,15,200,1,1,0,udp,SF,dns_spoof,T,T,F
+8.0,200,1000,0,3,400,6,1500,1,1,0,udp,SF,mqtt,T,T,T
+3.0,1000,500,0,5,1500,4,1200,1,1,0,tcp,REJ,local,F,T,T

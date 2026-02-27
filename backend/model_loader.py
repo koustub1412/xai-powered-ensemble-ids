@@ -1,4 +1,4 @@
-'''
+"""
 import joblib
 import tensorflow as tf
 import os
@@ -24,7 +24,8 @@ meta_model = tf.keras.models.load_model(
 
 class_3_multiplier = threshold_data.get("class_3_multiplier", 1.0)
 CLASS_NAMES = ["Normal", "DoS", "Probe", "Privilege"]
-'''
+"""
+
 '''
 import os
 import joblib
@@ -472,11 +473,12 @@ import shap
 from fastapi import UploadFile, File
 import pandas as pd
 
+
 class MultiDatasetThreatAnalyzer:
     def __init__(self):
         print("🚀 Starting the Context-Aware Multi-Model Manager...")
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
+
         # Initialize loaders for all expert frameworks
         self._load_nsl_kdd()  # Keras Framework
         self._load_ton_iot()  # Sklearn Framework (80-feature optimized)
@@ -488,7 +490,9 @@ class MultiDatasetThreatAnalyzer:
     # ==========================================
     def _load_nsl_kdd(self):
         nsl_dir = os.path.join(self.base_dir, "outputs", "models", "kdd")
-        self.nsl_meta = tf.keras.models.load_model(os.path.join(nsl_dir, "meta_model_ultimate.keras"))
+        self.nsl_meta = tf.keras.models.load_model(
+            os.path.join(nsl_dir, "meta_model_ultimate.keras")
+        )
         self.nsl_base = joblib.load(os.path.join(nsl_dir, "fast_base_models.pkl"))
         self.nsl_selector = joblib.load(os.path.join(nsl_dir, "feature_selector.pkl"))
         self.nsl_scaler = joblib.load(os.path.join(nsl_dir, "scaler.pkl"))
@@ -496,9 +500,20 @@ class MultiDatasetThreatAnalyzer:
         self.nsl_explainer = joblib.load(os.path.join(nsl_dir, "shap_explainer.pkl"))
         self.nsl_classes = ["Normal", "DoS", "Probe", "Privilege"]
 
+    def _prepare_nsl_for_shap(self, row):
+        df = pd.DataFrame([row])
+        df = pd.get_dummies(df)
+        df = df.reindex(columns=self.nsl_cols, fill_value=0)
+
+        X_selected = self.nsl_selector.transform(df)
+        X_scaled = self.nsl_scaler.transform(X_selected)
+
+        return pd.DataFrame(X_scaled, columns=self.nsl_selector.get_feature_names_out())
+
     def _load_ton_iot(self):
         ton_dir = os.path.join(self.base_dir, "outputs", "models", "ton")
         self.ton_base = joblib.load(os.path.join(ton_dir, "ton_base_models_final.pkl"))
+        self.ton_explainer = shap.TreeExplainer(self.ton_base["random_forest"])
         self.ton_meta = joblib.load(os.path.join(ton_dir, "ton_meta_model.pkl"))
         self.ton_scaler = joblib.load(os.path.join(ton_dir, "ton_scaler.pkl"))
         self.ton_meta_scaler = joblib.load(os.path.join(ton_dir, "ton_meta_scaler.pkl"))
@@ -509,6 +524,13 @@ class MultiDatasetThreatAnalyzer:
         self.ton_classes = le.classes_
         print(self.ton_classes)
 
+    def _prepare_ton_for_shap(self, row):
+        df = pd.DataFrame([row])
+        df = pd.get_dummies(df)
+        df = df.reindex(columns=self.ton_cols, fill_value=0)
+
+        return df  # TON SHAP uses aligned 80 features
+
     def _load_bot_iot(self):
         bot_dir = os.path.join(self.base_dir, "outputs", "models", "bot")
         self.bot_base = joblib.load(os.path.join(bot_dir, "bot_base_models.pkl"))
@@ -516,12 +538,22 @@ class MultiDatasetThreatAnalyzer:
         self.bot_scaler = joblib.load(os.path.join(bot_dir, "bot_scaler.pkl"))
         self.bot_cols = joblib.load(os.path.join(bot_dir, "bot_feature_columns.pkl"))
         self.bot_classes = ["DDoS", "DoS", "Normal", "Reconnaissance"]
-        self.bot_explainer = joblib.load(os.path.join(bot_dir, "bot_shap_explainer.pkl"))
+        self.bot_explainer = joblib.load(
+            os.path.join(bot_dir, "bot_shap_explainer.pkl")
+        )
+
+    def _prepare_bot_for_shap(self, row):
+        df = pd.DataFrame([row])
+        df = df.reindex(columns=self.bot_cols, fill_value=0)
+
+        return df
 
     # ==========================================
     # 2. THE AUTO-ROUTER
     # ==========================================
-    def analyze_traffic(self, input_data: dict, dataset_type: str = "auto"):
+    def analyze_traffic(
+        self, input_data: dict, dataset_type: str = "auto", enable_xai: bool = True
+    ):
 
         # 🔥 PRIORITY: If dataset_type is provided in payload, use it
         if "dataset_type" in input_data:
@@ -543,26 +575,33 @@ class MultiDatasetThreatAnalyzer:
         df = pd.DataFrame([input_data])
         df = pd.get_dummies(df)
 
-        if dataset_type == 'nsl':
-            return self._predict_nsl(df, input_data)
-        if dataset_type == 'ton':
-            return self._predict_ton(df, input_data)
-        if dataset_type == 'bot':
-            return self._predict_bot(df, input_data)
+        if dataset_type == "nsl":
+            return self._predict_nsl(df, input_data, enable_xai)
+        if dataset_type == "ton":
+            return self._predict_ton(df, input_data, enable_xai)
+        if dataset_type == "bot":
+            return self._predict_bot(df, input_data, enable_xai)
 
         raise ValueError("Dataset context not identified.")
 
     # ==========================================
     # 3. EXPERT PREDICTORS
     # ==========================================
-    def _predict_nsl(self, df, input_data):
+    def _predict_nsl(self, df, input_data, enable_xai=True):
         # 🟢 1. HEURISTICS FIRST (Immediate Filtering)
         count = float(input_data.get("count", 0))
         src_bytes = float(input_data.get("src_bytes", 0))
-        
+
         if count >= 500:
-            return self._format_report([0, 1, 0, 0], 1, self.nsl_classes, 'nsl', df, "Deterministic DoS Signature")
-        
+            return self._format_report(
+                [0, 1, 0, 0],
+                1,
+                self.nsl_classes,
+                "nsl",
+                df,
+                "Deterministic DoS Signature",
+            )
+
         # 🧠 2. AI STACKING
         df_aligned = self._align_features(df, self.nsl_cols)
         X_selected = self.nsl_selector.transform(df_aligned)
@@ -571,10 +610,12 @@ class MultiDatasetThreatAnalyzer:
         n_models, n_classes = len(self.nsl_base), len(self.nsl_classes)
         meta_features = np.zeros((1, n_models * n_classes))
         for i, model in enumerate(self.nsl_base):
-            meta_features[:, i*n_classes:(i+1)*n_classes] = model.predict_proba(X_scaled)
+            meta_features[:, i * n_classes : (i + 1) * n_classes] = model.predict_proba(
+                X_scaled
+            )
 
         raw_probs = self.nsl_meta.predict(meta_features, verbose=0)
-        
+
         epsilon = 1e-9
         logits = np.log(raw_probs + epsilon) * 0.85
         adj_probs = np.exp(logits) / np.exp(logits).sum(axis=1, keepdims=True)
@@ -582,15 +623,26 @@ class MultiDatasetThreatAnalyzer:
         adj_probs = adj_probs / adj_probs.sum(axis=1, keepdims=True)
 
         pred_class_idx = np.argmax(adj_probs, axis=1)[0]
-        
+
         # 3. Final Rule: Normalization check
         if src_bytes > 0 and src_bytes < 1000 and count < 10:
             pred_class_idx = 0
 
-        X_shap = pd.DataFrame(X_scaled, columns=self.nsl_selector.get_feature_names_out())
-        return self._format_report(adj_probs[0], pred_class_idx, self.nsl_classes, 'nsl', X_shap, None)
+        X_shap = pd.DataFrame(
+            X_scaled, columns=self.nsl_selector.get_feature_names_out()
+        )
+        return self._format_report(
+            adj_probs[0],
+            pred_class_idx,
+            self.nsl_classes,
+            "nsl",
+            X_shap,
+            None,
+            None,
+            enable_xai,
+        )
 
-    def _predict_ton(self, df, input_data):
+    def _predict_ton(self, df, input_data, enable_xai=True):
         df_temp = pd.get_dummies(df)
 
         df_encoded = df_temp.reindex(columns=self.ton_cols, fill_value=0)
@@ -608,8 +660,12 @@ class MultiDatasetThreatAnalyzer:
         meta_features = np.zeros((1, len(self.ton_base) * n_classes))
 
         for i, (name, model) in enumerate(self.ton_base.items()):
-            input_features = X_scaled if name in ["knn", "logistic_regression"] else X_selected
-            meta_features[:, i*n_classes:(i+1)*n_classes] = model.predict_proba(input_features)
+            input_features = (
+                X_scaled if name in ["knn", "logistic_regression"] else X_selected
+            )
+            meta_features[:, i * n_classes : (i + 1) * n_classes] = model.predict_proba(
+                input_features
+            )
 
         # Step 3: Meta prediction
         meta_scaled = self.ton_meta_scaler.transform(meta_features)
@@ -640,35 +696,164 @@ class MultiDatasetThreatAnalyzer:
             confidence = probs[pred_class_idx]
         # Step 4: SHAP input uses RF feature names (80)
         X_shap = pd.DataFrame(
-            X_selected,
-            columns=self.ton_base["random_forest"].feature_names_in_
+            X_selected, columns=self.ton_base["random_forest"].feature_names_in_
         )
         print("TON PROBS:", dict(zip(self.ton_classes, probs)))
         return self._format_report(
-        probs,
-        pred_class_idx,
-        self.ton_classes,
-        'ton',
-        X_shap,
-        None,
-        confidence  # 👈 only TON sends this
-    )
-    def _predict_bot(self, df, input_data):
+            probs,
+            pred_class_idx,
+            self.ton_classes,
+            "ton",
+            X_shap,
+            None,
+            confidence,  # 👈 only TON sends this
+            enable_xai,
+        )
+
+    def _predict_bot(self, df, input_data, enable_xai=True):
         df_aligned = self._align_features(df, self.bot_cols)
         X_instance = df_aligned.values
         X_scaled = self.bot_scaler.transform(X_instance)
-        
+
         n_classes = len(self.bot_classes)
         meta_features = np.zeros((1, len(self.bot_base) * n_classes))
         for i, model in enumerate(self.bot_base):
             model_name = type(model).__name__
-            input_features = X_scaled if model_name in ["KNeighborsClassifier", "LogisticRegression"] else X_instance
-            meta_features[:, i*n_classes:(i+1)*n_classes] = model.predict_proba(input_features)
-        
+            input_features = (
+                X_scaled
+                if model_name in ["KNeighborsClassifier", "LogisticRegression"]
+                else X_instance
+            )
+            meta_features[:, i * n_classes : (i + 1) * n_classes] = model.predict_proba(
+                input_features
+            )
+
         probs = self.bot_meta.predict_proba(meta_features)[0]
         pred_class_idx = np.argmax(probs)
 
-        return self._format_report(probs, pred_class_idx, self.bot_classes, 'bot', df_aligned, None)
+        return self._format_report(
+            probs,
+            pred_class_idx,
+            self.bot_classes,
+            "bot",
+            df_aligned,
+            None,
+            None,
+            enable_xai,
+        )
+
+    def batch_predict_nsl(self, df: pd.DataFrame):
+        df = pd.get_dummies(df)
+        df_aligned = df.reindex(columns=self.nsl_cols, fill_value=0)
+
+        X_selected = self.nsl_selector.transform(df_aligned)
+        X_scaled = self.nsl_scaler.transform(X_selected)
+
+        n_samples = X_scaled.shape[0]
+        n_classes = len(self.nsl_classes)
+        meta_features = np.zeros((n_samples, len(self.nsl_base) * n_classes))
+
+        for i, model in enumerate(self.nsl_base):
+            probs = model.predict_proba(X_scaled)
+            meta_features[:, i * n_classes : (i + 1) * n_classes] = probs
+
+        raw_probs = self.nsl_meta.predict(meta_features, verbose=0)
+        predictions = []
+
+        for i in range(n_samples):
+            probs = raw_probs[i]
+            pred_idx = np.argmax(probs)
+
+            predictions.append(
+                {
+                    "prediction": self.nsl_classes[pred_idx],
+                    "confidence": float(probs[pred_idx]),
+                    "risk_level": (
+                        "LOW" if self.nsl_classes[pred_idx] == "Normal" else "HIGH"
+                    ),
+                }
+            )
+
+        return predictions
+
+    def batch_predict_ton(self, df: pd.DataFrame):
+        df_encoded = pd.get_dummies(df)
+        df_encoded = df_encoded.reindex(columns=self.ton_cols, fill_value=0)
+
+        X_selected = df_encoded.values
+        X_scaled = self.ton_scaler.transform(X_selected)
+
+        n_samples = X_selected.shape[0]
+        n_classes = len(self.ton_classes)
+        meta_features = np.zeros((n_samples, len(self.ton_base) * n_classes))
+
+        for i, (name, model) in enumerate(self.ton_base.items()):
+            input_features = (
+                X_scaled if name in ["knn", "logistic_regression"] else X_selected
+            )
+            probs = model.predict_proba(input_features)
+            meta_features[:, i * n_classes : (i + 1) * n_classes] = probs
+
+        meta_scaled = self.ton_meta_scaler.transform(meta_features)
+        final_probs = self.ton_meta.predict_proba(meta_scaled)
+
+        predictions = []
+
+        for i in range(n_samples):
+            probs = final_probs[i]
+            pred_idx = np.argmax(probs)
+
+            predictions.append(
+                {
+                    "prediction": str(self.ton_classes[pred_idx]).capitalize(),
+                    "confidence": float(probs[pred_idx]),
+                    "risk_level": (
+                        "LOW" if self.ton_classes[pred_idx] == "normal" else "HIGH"
+                    ),
+                }
+            )
+
+        return predictions
+
+    def batch_predict_bot(self, df: pd.DataFrame):
+        df_aligned = df.reindex(columns=self.bot_cols, fill_value=0)
+
+        X_instance = df_aligned.values
+        X_scaled = self.bot_scaler.transform(X_instance)
+
+        n_samples = X_instance.shape[0]
+        n_classes = len(self.bot_classes)
+        meta_features = np.zeros((n_samples, len(self.bot_base) * n_classes))
+
+        for i, model in enumerate(self.bot_base):
+            model_name = type(model).__name__
+            input_features = (
+                X_scaled
+                if model_name in ["KNeighborsClassifier", "LogisticRegression"]
+                else X_instance
+            )
+            probs = model.predict_proba(input_features)
+            meta_features[:, i * n_classes : (i + 1) * n_classes] = probs
+
+        final_probs = self.bot_meta.predict_proba(meta_features)
+
+        predictions = []
+
+        for i in range(n_samples):
+            probs = final_probs[i]
+            pred_idx = np.argmax(probs)
+
+            predictions.append(
+                {
+                    "prediction": self.bot_classes[pred_idx],
+                    "confidence": float(probs[pred_idx]),
+                    "risk_level": (
+                        "LOW" if self.bot_classes[pred_idx] == "Normal" else "HIGH"
+                    ),
+                }
+            )
+
+        return predictions
 
     # ==========================================
     # 4. UTILITIES & XAI
@@ -680,12 +865,22 @@ class MultiDatasetThreatAnalyzer:
                 df[col] = 0
         return df[required_columns]
 
-    def _get_shap_explanation(self, X_df, dataset_type, predicted_class):
+    def _get_shap_explanation(
+        self,
+        X_df,
+        dataset_type,
+        predicted_class,
+        top_k=5,
+        mode="detailed",  # 👈 default = old behavior
+    ):
         try:
-            if dataset_type == 'nsl':
+            # -------------------------
+            # 1️⃣ Select Correct Explainer
+            # -------------------------
+            if dataset_type == "nsl":
                 explainer = self.nsl_explainer
                 classes = self.nsl_classes
-            elif dataset_type == 'ton':
+            elif dataset_type == "ton":
                 explainer = shap.TreeExplainer(self.ton_base["random_forest"])
                 classes = self.ton_classes
             else:
@@ -693,7 +888,10 @@ class MultiDatasetThreatAnalyzer:
                 classes = self.bot_classes
 
             shap_values = explainer.shap_values(X_df)
-            
+
+            # -------------------------
+            # 2️⃣ Extract Correct Class SHAP
+            # -------------------------
             if isinstance(shap_values, list):
                 shap_for_class = shap_values[predicted_class][0]
             else:
@@ -705,20 +903,66 @@ class MultiDatasetThreatAnalyzer:
             feature_impacts = sorted(
                 list(zip(X_df.columns, shap_for_class)),
                 key=lambda x: abs(x[1]),
-                reverse=True
+                reverse=True,
             )
 
-            breakdown = ""
-            for feat, impact in feature_impacts[:3]:
-                direction = "increased" if impact > 0 else "reduced"
-                clean_feat = feat.replace('_', ' ').title()
-                breakdown += f"  ➤ {clean_feat}\n"
-                breakdown += f"      Insight: This feature {direction} the likelihood of {classes[predicted_class]} detection.\n\n"
-            return breakdown
-        except:
-            return "Forensic breakdown currently processing..."
-    
-    def _format_report(self,probs,pred_class_idx,class_names,dataset_type,X_df,heuristic_flag,adjusted_confidence=None):
+            # ==================================================
+            # 3️⃣ MODE SWITCH
+            # ==================================================
+
+            # 🔵 HUMAN FRIENDLY MODE (for CSV batch)
+            if mode == "human":
+                breakdown = (
+                    f"\n🧠 Why was this classified as {classes[predicted_class]}?\n\n"
+                )
+
+                for feat, impact in feature_impacts[:top_k]:
+                    clean_feat = feat.replace("_", " ").title()
+
+                    if impact > 0:
+                        breakdown += (
+                            f"🔺 {clean_feat} strongly contributed to detecting "
+                            f"{classes[predicted_class]} activity.\n"
+                        )
+                    else:
+                        breakdown += (
+                            f"🔻 {clean_feat} slightly reduced suspicion for "
+                            f"{classes[predicted_class]}.\n"
+                        )
+
+                breakdown += (
+                    "\n📌 These behavioural signals influenced the final decision."
+                )
+                return breakdown
+
+            # 🟢 DETAILED MODE (original forensic style – for Inject)
+            else:
+                breakdown = ""
+                for feat, impact in feature_impacts[:top_k]:
+                    direction = "increased" if impact > 0 else "reduced"
+                    clean_feat = feat.replace("_", " ").title()
+                    breakdown += f"  ➤ {clean_feat}\n"
+                    breakdown += (
+                        f"      Insight: This feature {direction} "
+                        f"the likelihood of {classes[predicted_class]} detection.\n\n"
+                    )
+                return breakdown
+
+        except Exception as e:
+            print("SHAP processing error:", e)
+            return "⚠ Unable to generate detailed explanation for this instance."
+
+    def _format_report(
+        self,
+        probs,
+        pred_class_idx,
+        class_names,
+        dataset_type,
+        X_df,
+        heuristic_flag,
+        adjusted_confidence=None,
+        enable_xai=True,
+    ):
         # ------------------------------
         # 1️⃣ Prediction Label Handling
         # ------------------------------
@@ -737,11 +981,12 @@ class MultiDatasetThreatAnalyzer:
         # ------------------------------
         # 3️⃣ SHAP Explanation
         # ------------------------------
-        forensic_text = self._get_shap_explanation(
-            X_df,
-            dataset_type,
-            pred_class_idx
-        )
+        if enable_xai:
+            forensic_text = self._get_shap_explanation(
+                X_df, dataset_type, pred_class_idx
+            )
+        else:
+            forensic_text = "⚡ XAI Disabled (Performance Mode)"
 
         # ------------------------------
         # 4️⃣ Risk Logic (UNCHANGED)
@@ -789,8 +1034,7 @@ class MultiDatasetThreatAnalyzer:
         # 6️⃣ Structured Probability Dict (UNCHANGED)
         # ------------------------------
         prob_dict = {
-            str(class_names[i]): float(probs[i])
-            for i in range(len(class_names))
+            str(class_names[i]): float(probs[i]) for i in range(len(class_names))
         }
 
         # ------------------------------
@@ -802,7 +1046,8 @@ class MultiDatasetThreatAnalyzer:
             "risk_level": risk_level,
             "confidence": round(confidence_score, 4),
             "probabilities": prob_dict,
-            "explanation": report
+            "explanation": report,
         }
+
 
 analyzer = MultiDatasetThreatAnalyzer()

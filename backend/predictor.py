@@ -291,18 +291,24 @@ def predict_single(input_data: dict):
 
 from model_loader import analyzer
 
-def predict_single(input_data: dict, dataset_type: str = "nsl"):
+def predict_single(
+    input_data: dict,
+    dataset_type: str = "nsl",
+    enable_xai: bool = True
+):
     """
-    Takes the raw JSON data from the frontend and the chosen dataset type,
-    and passes it to the central MultiDatasetThreatAnalyzer.
+    Takes raw JSON data from frontend and passes it
+    to MultiDatasetThreatAnalyzer.
     """
     try:
-        # Pass the data to the Kitchen Manager
-        result = analyzer.analyze_traffic(input_data, dataset_type)
+        result = analyzer.analyze_traffic(
+            input_data,
+            dataset_type,
+            enable_xai=enable_xai   # 🔥 Pass it properly
+        )
         return result
-        
+
     except Exception as e:
-        # If anything breaks, return a safe error message to the frontend
         return {
             "prediction": "ERROR",
             "risk_level": "UNKNOWN",
