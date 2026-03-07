@@ -58,7 +58,7 @@ def predict_traffic(data: NetworkTraffic, background_tasks: BackgroundTasks):
 @app.get("/history")
 def get_history():
     """Returns the last 50 traffic logs."""
-    logs = list(collection.find({}, {"_id": 0}).sort("timestamp", -1).limit(50))
+    logs = list(collection.find({}, {"_id": 0}).sort("timestamp", -1))
     return logs
 
 
@@ -190,71 +190,74 @@ def clear_all_logs():
 #         "xai_rows": len(suspicious_indices),
 #         "message": "Batch processed with selective XAI.",
 #     }
-@app.post("/predict-file/{dataset}")
-async def predict_file(dataset: str, file: UploadFile = File(...)):
+
+def detect_dataset_type(columns):
+
+    cols = set(columns)
+
+    # --- NSL-KDD ---
+    if {"protocol_type", "service", "flag"}.issubset(cols):
+        return "nsl"
+
+    # --- ToN-IoT ---
+    if {"conn_state", "src_pkts", "dst_pkts"}.intersection(cols):
+        return "ton"
+
+    # --- BoT-IoT ---
+    if {"sport", "dport", "rate", "srate"}.intersection(cols):
+        return "bot"
+
+    return "unknown"
+
+@app.post("/predict-file")
+async def predict_file(file: UploadFile = File(...)):
+
     df = pd.read_csv(file.file)
 
-    # 1️⃣ Fast batch prediction
-    if dataset == "nsl":
-        results = analyzer.batch_predict_nsl(df)
-    elif dataset == "ton":
-        results = analyzer.batch_predict_ton(df)
-    elif dataset == "bot":
-        results = analyzer.batch_predict_bot(df)
-    else:
-        return {"error": "Invalid dataset"}
+    # 🔍 Detect dataset automatically
+    dataset = detect_dataset_type(df.columns)
+    print("Detected dataset:", dataset)
+
+    if dataset == "unknown":
+        return {"error": "Unsupported dataset detected"}
 
     bulk_docs = []
+    attack_count = 0
 
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
 
-        # Default explanation for normal
-        explanation_text = (
-            "✅ This traffic instance aligns with normal network behaviour patterns. "
-            "No significant threat indicators were identified."
+        row_dict = row.to_dict()
+
+        # 🔥 Use SAME pipeline as packet injection
+        report = analyzer.analyze_traffic(
+            row_dict,
+            dataset,
+            enable_xai=True
         )
 
-        # 🔥 Generate SHAP for ALL attack rows (not limited to 5)
-        if results[i]["prediction"].lower() != "normal":
+        # Count attacks
+        if report["prediction"].lower() != "normal":
+            attack_count += 1
 
-            if dataset == "nsl":
-                X_shap = analyzer._prepare_nsl_for_shap(row)
-                pred_idx = analyzer.nsl_classes.index(results[i]["prediction"])
+        bulk_docs.append({
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "dataset": dataset,
+            "prediction": report["prediction"],
+            "confidence": report["confidence"],
+            "risk_level": report["risk_level"],
+            "explanation": report["explanation"],
+            "input_features": row_dict
+        })
 
-            elif dataset == "ton":
-                X_shap = analyzer._prepare_ton_for_shap(row)
-                pred_idx = list(analyzer.ton_classes).index(
-                    results[i]["prediction"].lower()
-                )
-
-            elif dataset == "bot":
-                X_shap = analyzer._prepare_bot_for_shap(row)
-                pred_idx = analyzer.bot_classes.index(results[i]["prediction"])
-
-            explanation_text = analyzer._get_shap_explanation(
-                X_shap, dataset, predicted_class=pred_idx, top_k=5
-            )
-
-        bulk_docs.append(
-            {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "dataset": dataset,
-                "prediction": results[i]["prediction"],
-                "confidence": results[i]["confidence"],
-                "risk_level": results[i]["risk_level"],
-                "explanation": explanation_text,
-                "input_features": row.to_dict(),
-            }
-        )
-
+    # 🚀 Fast bulk insert
     collection.insert_many(bulk_docs)
 
     return {
-        "total_rows": len(results),
-        "xai_rows": len(bulk_docs),   # now all rows processed
-        "message": "Batch processed with full XAI for attacks.",
+        "dataset_detected": dataset,
+        "total_rows": len(bulk_docs),
+        "xai_rows": attack_count,
+        "message": "CSV processed successfully."
     }
-
 # @app.post("/predict-file/{dataset}")
 # async def predict_file(
 #     dataset: str,

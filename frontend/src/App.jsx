@@ -16,7 +16,12 @@ function App() {
   const [showOnlyAttacks, setShowOnlyAttacks] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 8; // You can change to 10 if you want
-
+  const [detectedDataset, setDetectedDataset] = useState(null);
+  const datasetNames = {
+  nsl: "Legacy IT (NSL-KDD)",
+  ton: "IoT Sensors (ToN-IoT)",
+  bot: "Smart Home (BoT-IoT)"
+};
   const fetchStats = async () => {
     try {
       const res = await axios.get(`${API_BASE}/stats`);
@@ -55,254 +60,269 @@ function App() {
 
   const handleCSVUpload = async (event) => {
     console.log("UPLOAD TRIGGERED");
+
     const file = event.target.files[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append("file", file);
     console.log("FILE SELECTED:", file.name);
 
+    const formData = new FormData();
+    formData.append("file", file); // 🔥 append first
+
     try {
-      await axios.post(`${API_BASE}/predict-file/${datasetType}`, formData, {
+      const response = await axios.post(`${API_BASE}/predict-file`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
+      setDetectedDataset(response.data.dataset_detected);
+
       fetchStats();
       fetchHistory();
+
       alert("CSV Uploaded Successfully!");
-    } catch {
+    } catch (error) {
+      console.error(error);
       alert("CSV Upload Failed!");
     }
   };
+  const jitter = (value, percent = 0.15) => {
+  const delta = value * percent;
+  return Math.max(0, value + (Math.random() * 2 - 1) * delta);
+};
   const simulateTraffic = async () => {
-    let sample = {};
-    const rand = Math.random();
+  let sample = {};
+  const rand = Math.random();
 
-    // 1. Logic for NSL-KDD (Legacy IT)
-    if (datasetType === "nsl") {
-      if (rand < 0.25) {
-        sample = {
-          duration: 0,
-          protocol_type: "tcp",
-          service: "http",
-          flag: "SF",
-          src_bytes: 800,
-          dst_bytes: 20000,
-          logged_in: 1,
-          count: 1,
-        };
-      } else if (rand < 0.5) {
-        sample = {
-          duration: 0,
-          protocol_type: "tcp",
-          service: "http",
-          flag: "S0",
-          src_bytes: 0,
-          dst_bytes: 0,
-          count: 600,
-          srv_count: 600,
-        };
-      } else if (rand < 0.75) {
-        sample = {
-          duration: 0,
-          protocol_type: "tcp",
-          service: "ftp_data",
-          flag: "REJ",
-          src_bytes: 0,
-          dst_bytes: 0,
-          count: 40,
-          srv_count: 15,
-        };
-      } else {
-        sample = {
-          duration: 12,
-          protocol_type: "tcp",
-          service: "telnet",
-          flag: "SF",
-          src_bytes: 2500,
-          dst_bytes: 4000,
-          logged_in: 1,
-          hot: 5,
-          root_shell: 1,
-        };
+  // 🔹 NSL-KDD (Legacy Network)
+  if (datasetType === "nsl") {
+    if (rand < 0.25) {
+      sample = {
+        duration: jitter(1),
+        protocol_type: "tcp",
+        service: "http",
+        flag: "SF",
+        src_bytes: jitter(800),
+        dst_bytes: jitter(20000),
+        logged_in: 1,
+        count: Math.round(jitter(1)),
+      };
+
+    } else if (rand < 0.5) {
+      sample = {
+        duration: jitter(1),
+        protocol_type: "tcp",
+        service: "http",
+        flag: "S0",
+        src_bytes: jitter(0),
+        dst_bytes: jitter(0),
+        count: Math.round(jitter(600)),
+        srv_count: Math.round(jitter(600)),
+      };
+
+    } else if (rand < 0.75) {
+      sample = {
+        duration: jitter(1),
+        protocol_type: "tcp",
+        service: "ftp_data",
+        flag: "REJ",
+        src_bytes: jitter(0),
+        dst_bytes: jitter(0),
+        count: Math.round(jitter(40)),
+        srv_count: Math.round(jitter(15)),
+      };
+
+    } else {
+      sample = {
+        duration: jitter(12),
+        protocol_type: "tcp",
+        service: "telnet",
+        flag: "SF",
+        src_bytes: jitter(2500),
+        dst_bytes: jitter(4000),
+        logged_in: 1,
+        hot: Math.round(jitter(5)),
+        root_shell: 1,
+      };
+    }
+  }
+
+  // 🔹 ToN-IoT (IoT telemetry)
+  else if (datasetType === "ton") {
+
+    const baseTon = {
+      duration: jitter(5),
+      src_bytes: jitter(100),
+      dst_bytes: jitter(100),
+      missed_bytes: 0,
+      src_pkts: Math.round(jitter(5)),
+      dst_pkts: Math.round(jitter(5)),
+      src_ip_bytes: jitter(200),
+      dst_ip_bytes: jitter(200),
+      dns_qclass: 1,
+      dns_qtype: 1,
+      dns_rcode: 0,
+      proto: "tcp",
+      conn_state: "SF",
+      dns_query: "-",
+      dns_AA: "F",
+      dns_RD: "T",
+      dns_RA: "T",
+      dns_rejected: "F",
+      ssl_version: "TLSv12",
+      ssl_established: "-",
+      http_uri: "-",
+      weird_name: "active_connection_reuse",
+    };
+
+    const tonTemplates = {
+
+      normal: {
+        ...baseTon
+      },
+
+      mitm: {
+        ...baseTon,
+        proto: "udp",
+        dns_AA: "T",
+        dns_RA: "F",
+        dns_query: "broker.hivemq.com",
+      },
+
+      ddos: {
+        ...baseTon,
+        duration: jitter(60),
+        src_pkts: Math.round(jitter(50000)),
+        dst_pkts: Math.round(jitter(50000)),
+        conn_state: "S0",
+        dns_rejected: "T",
+      },
+
+      dos: {
+        ...baseTon,
+        duration: jitter(40),
+        src_pkts: Math.round(jitter(20000)),
+        dst_pkts: Math.round(jitter(500)),
+        conn_state: "S0",
+      },
+
+      scanning: {
+        ...baseTon,
+        duration: jitter(0.001),
+        src_pkts: Math.round(jitter(3000)),
+        dst_pkts: Math.round(jitter(10)),
+        conn_state: "REJ",
+      },
+
+      injection: {
+        ...baseTon,
+        dns_query: "testphp.vulnweb.com/listproducts.php",
+        dns_AA: "T",
+        dns_RA: "F",
+      },
+
+      xss: {
+        ...baseTon,
+        dns_query: "www.dvwa.co.uk",
+        duration: jitter(3),
+        src_bytes: jitter(800),
+      },
+
+      password: {
+        ...baseTon,
+        duration: jitter(8),
+        src_pkts: Math.round(jitter(50)),
+        dst_pkts: Math.round(jitter(50)),
+        dns_query: "192.168.1.195/dvwa/login.php-r",
+      },
+
+      ransomware: {
+        ...baseTon,
+        duration: jitter(25),
+        src_bytes: jitter(50000),
+        dst_bytes: jitter(100),
+        dns_query: "elasticsearch.mydns.com",
+      },
+
+      backdoor: {
+        ...baseTon,
+        duration: jitter(15),
+        proto: "udp",
+        conn_state: "OTH",
+        dns_query: "hnzwefg.mydns.com",
       }
-    } else if (datasetType === "ton") {
-      // 🔹 Base Template (common realistic flow structure)
-      const baseTon = {
-        duration: 5,
-        src_bytes: 100,
-        dst_bytes: 100,
-        missed_bytes: 0,
-        src_pkts: 5,
-        dst_pkts: 5,
-        src_ip_bytes: 200,
-        dst_ip_bytes: 200,
-        dns_qclass: 1,
-        dns_qtype: 1,
-        dns_rcode: 0,
+    };
+
+    const attackTypes = Object.keys(tonTemplates);
+    const chosen = attackTypes[Math.floor(Math.random() * attackTypes.length)];
+
+    sample = tonTemplates[chosen];
+
+    console.log("🚀 TON Injecting:", chosen);
+  }
+
+  // 🔹 BoT-IoT
+  else if (datasetType === "bot") {
+
+    if (rand < 0.6) {
+      sample = {
+        bytes: jitter(5000),
+        pkts: Math.round(jitter(10)),
+        dur: jitter(20),
+        rate: jitter(0.5),
+        srate: jitter(0.2),
+        drate: jitter(0.3),
+        state: "CON",
         proto: "tcp",
-        conn_state: "SF",
-        dns_query: "-",
-        dns_AA: "F",
-        dns_RD: "T",
-        dns_RA: "T",
-        dns_rejected: "F",
-        ssl_version: "TLSv12",
-        ssl_established: "-",
-        http_uri: "-",
-        weird_name: "active_connection_reuse",
       };
 
-      // 🔹 Attack Templates (only override what matters)
-      const tonTemplates = {
-        normal: {
-          ...baseTon,
-        },
-
-        mitm: {
-          ...baseTon,
-          proto: "udp",
-          dns_AA: "T",
-          dns_RA: "F",
-          dns_query: "broker.hivemq.com",
-        },
-
-        ddos: {
-          ...baseTon,
-          duration: 60,
-          src_pkts: 50000,
-          dst_pkts: 50000,
-          conn_state: "S0",
-          dns_rejected: "T",
-        },
-
-        dos: {
-          ...baseTon,
-          duration: 40,
-          src_pkts: 20000,
-          dst_pkts: 500,
-          conn_state: "S0",
-        },
-
-        scanning: {
-          ...baseTon,
-          duration: 0.001,
-          src_pkts: 3000,
-          dst_pkts: 10,
-          conn_state: "REJ",
-        },
-
-        injection: {
-          ...baseTon,
-          dns_query: "testphp.vulnweb.com/listproducts.php",
-          dns_AA: "T",
-          dns_RA: "F",
-        },
-
-        xss: {
-          ...baseTon,
-          dns_query: "www.dvwa.co.uk",
-          duration: 3,
-          src_bytes: 800,
-        },
-
-        password: {
-          ...baseTon,
-          duration: 8,
-          src_pkts: 50,
-          dst_pkts: 50,
-          dns_query: "192.168.1.195/dvwa/login.php-r",
-        },
-
-        ransomware: {
-          ...baseTon,
-          duration: 25,
-          src_bytes: 50000,
-          dst_bytes: 100,
-          dns_query: "elasticsearch.mydns.com",
-        },
-
-        backdoor: {
-          ...baseTon,
-          duration: 15,
-          proto: "udp",
-          conn_state: "OTH",
-          dns_query: "hnzwefg.mydns.com",
-        },
+    } else if (rand < 0.75) {
+      sample = {
+        bytes: jitter(40),
+        pkts: Math.round(jitter(20)),
+        dur: jitter(0.001),
+        rate: jitter(5000),
+        srate: jitter(5000),
+        drate: 0,
+        state: "RST",
+        proto: "tcp",
       };
 
-      // 🔹 Randomly choose one of the 10 attack types
-      const attackTypes = Object.keys(tonTemplates);
-      const chosen =
-        attackTypes[Math.floor(Math.random() * attackTypes.length)];
+    } else if (rand < 0.9) {
+      sample = {
+        bytes: jitter(8000),
+        pkts: Math.round(jitter(1200)),
+        dur: jitter(15),
+        rate: jitter(80),
+        srate: jitter(80),
+        drate: 0,
+        state: "REQ",
+        proto: "tcp",
+      };
 
-      sample = tonTemplates[chosen];
-
-      console.log("🚀 TON Injecting:", chosen);
+    } else {
+      sample = {
+        bytes: jitter(100),
+        pkts: Math.round(jitter(2000)),
+        dur: jitter(0.1),
+        rate: jitter(15000),
+        srate: jitter(15000),
+        drate: 0,
+        state: "INT",
+        proto: "udp",
+      };
     }
+  }
 
-    // 🚀 HIGH-CONTRAST BoT-IoT Simulation (To break DDoS/Recon bias)
-    else if (datasetType === "bot") {
-      if (rand < 0.6) {
-        // NORMAL (60%): High duration, low rate, established connection
-        sample = {
-          bytes: 5000,
-          pkts: 10,
-          dur: 20.0,
-          rate: 0.5,
-          srate: 0.2,
-          drate: 0.3,
-          state: "CON",
-          proto: "tcp",
-        };
-      } else if (rand < 0.75) {
-        // RECONNAISSANCE (15%): Micro-duration, high source rate, reset state
-        sample = {
-          bytes: 40,
-          pkts: 20,
-          dur: 0.001,
-          rate: 5000,
-          srate: 5000,
-          drate: 0,
-          state: "RST",
-          proto: "tcp",
-        };
-      } else if (rand < 0.9) {
-        // DoS (15%): Large packet count, moderate rate, requested state
-        sample = {
-          bytes: 8000,
-          pkts: 1200,
-          dur: 15.0,
-          rate: 80,
-          srate: 80,
-          drate: 0,
-          state: "REQ",
-          proto: "tcp",
-        };
-      } else {
-        // DDoS (10%): Massive flood, tiny duration, UDP protocol
-        sample = {
-          bytes: 100,
-          pkts: 2000,
-          dur: 0.1,
-          rate: 15000,
-          srate: 15000,
-          drate: 0,
-          state: "INT",
-          proto: "udp",
-        };
-      }
-    }
+  const payload = { ...sample, dataset_type: datasetType };
 
-    const payload = { ...sample, dataset_type: datasetType };
-
-    try {
-      await axios.post(`${API_BASE}/predict`, payload);
-      fetchStats();
-      fetchHistory();
-    } catch {
-      alert("Injection failed!");
-    }
-  };
+  try {
+    await axios.post(`${API_BASE}/predict`, payload);
+    fetchStats();
+    fetchHistory();
+  } catch {
+    alert("Injection failed!");
+  }
+};
   const formatExactTime = (isoString) => {
     if (!isoString) return "N/A";
     const utcString = isoString.endsWith("Z") ? isoString : `${isoString}Z`;
@@ -346,6 +366,7 @@ function App() {
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage,
   );
+
   return (
     <div style={mainStyle}>
       {/* ================= HEADER ROW ================= */}
@@ -360,7 +381,7 @@ function App() {
         }}
       >
         {/* LEFT → APP NAME */}
-        <h1 style={{ margin: 0 }}>🛡️ Live Hybrid IDS SOC Dashboard</h1>
+        <h1 style={{ margin: 0 }}>🛡️Hybrid IDS SOC Dashboard</h1>
 
         {/* RIGHT → CONTROLS */}
         <div
@@ -464,16 +485,13 @@ function App() {
           >
             {(stats.chart_data || []).map((entry, index) => (
               <div
-              
                 key={index}
                 style={{
-                  
                   display: "flex",
                   alignItems: "center",
                   gap: "10px",
                   fontSize: "18px",
                   fontWeight: "600",
-                  
                 }}
               >
                 <div
@@ -506,65 +524,101 @@ function App() {
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
                 alignItems: "center",
                 marginBottom: "20px",
-                flexWrap: "wrap",
                 gap: "15px",
               }}
             >
-              <h3 style={{ margin: 0 }}>
-                Live Traffic Logs (Click Row for XAI Report)
-              </h3>
+              {/* LEFT */}
+              <div>
+                <h3 style={{ margin: 0 }}>
+                  Traffic Logs (Click Row for XAI Report)
+                </h3>
+              </div>
 
-              {/* BIG SOC TOGGLE */}
+              {/* CENTER — DATASET */}
+              {detectedDataset && (
+                <div
+                  style={{
+                    margin: "0 auto",
+                    textAlign: "center",
+                    fontSize: "18px",
+                    fontWeight: "700",
+                    color: "#00ccff",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  <span
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "8px",
+                      border: "1px solid #00ccff",
+                      color: "#00ccff",
+                      background: "#0f172a",
+                      fontWeight: "700",
+                    }}
+                  >
+                    
+                    Detected Dataset: {datasetNames[detectedDataset]}
+                  </span>
+                </div>
+              )}
+
+              {/* RIGHT — SOC TOGGLE */}
               <div
                 style={{
+                  marginLeft: "auto",
                   display: "flex",
-                  backgroundColor: "#0f172a",
-                  borderRadius: "12px",
-                  overflow: "hidden",
-                  border: "1px solid #1f2937",
-                  boxShadow: "0 0 10px rgba(0,0,0,0.4)",
                 }}
               >
-                <button
-                  onClick={() => setShowOnlyAttacks(false)}
+                <div
                   style={{
-                    padding: "12px 28px",
-                    fontWeight: "bold",
-                    fontSize: "14px",
-                    border: "none",
-                    cursor: "pointer",
-                    backgroundColor: !showOnlyAttacks
-                      ? "#00ccff"
-                      : "transparent",
-                    color: !showOnlyAttacks ? "black" : "#94a3b8",
-                    transition: "all 0.2s ease",
+                    display: "flex",
+                    backgroundColor: "#0f172a",
+                    borderRadius: "12px",
+                    overflow: "hidden",
+                    border: "1px solid #1f2937",
+                    boxShadow: "0 0 10px rgba(0,0,0,0.4)",
                   }}
                 >
-                  🟢 All Traffic
-                </button>
+                  <button
+                    onClick={() => setShowOnlyAttacks(false)}
+                    style={{
+                      padding: "12px 28px",
+                      fontWeight: "bold",
+                      fontSize: "14px",
+                      border: "none",
+                      cursor: "pointer",
+                      backgroundColor: !showOnlyAttacks
+                        ? "#00ccff"
+                        : "transparent",
+                      color: !showOnlyAttacks ? "black" : "#94a3b8",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    🟢 All Traffic
+                  </button>
 
-                <button
-                  onClick={() => setShowOnlyAttacks(true)}
-                  style={{
-                    padding: "12px 28px",
-                    fontWeight: "bold",
-                    fontSize: "14px",
-                    border: "none",
-                    cursor: "pointer",
-                    backgroundColor: showOnlyAttacks
-                      ? "#ff0044"
-                      : "transparent",
-                    color: showOnlyAttacks ? "white" : "#94a3b8",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  🔴 Attacks Only
-                </button>
+                  <button
+                    onClick={() => setShowOnlyAttacks(true)}
+                    style={{
+                      padding: "12px 28px",
+                      fontWeight: "bold",
+                      fontSize: "14px",
+                      border: "none",
+                      cursor: "pointer",
+                      backgroundColor: showOnlyAttacks
+                        ? "#ff0044"
+                        : "transparent",
+                      color: showOnlyAttacks ? "white" : "#94a3b8",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    🔴 Attacks Only
+                  </button>
+                </div>
               </div>
-            </div>
+            </div>{" "}
           </div>
 
           <table style={tableStyle}>

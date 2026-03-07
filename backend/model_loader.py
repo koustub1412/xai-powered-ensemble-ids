@@ -981,7 +981,15 @@ class MultiDatasetThreatAnalyzer:
         # ------------------------------
         # 3️⃣ SHAP Explanation
         # ------------------------------
-        if enable_xai:
+        if heuristic_flag:
+            forensic_text = (
+                "⚙️ This prediction was triggered by a deterministic rule.\n\n"
+                f"Rule Activated: {heuristic_flag}\n\n"
+                "The traffic pattern matched a known attack signature.\n"
+                "Machine learning explanation is not applicable."
+            )
+
+        elif enable_xai:
             forensic_text = self._get_shap_explanation(
                 X_df, dataset_type, pred_class_idx
             )
