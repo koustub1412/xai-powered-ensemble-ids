@@ -113,6 +113,83 @@ def clear_all_logs():
     return {"status": "success", "message": "All logs cleared"}
 
 
+# @app.post("/predict-file/{dataset}")
+# async def predict_file(dataset: str, file: UploadFile = File(...)):
+#     df = pd.read_csv(file.file)
+
+#     # 1️⃣ Fast batch prediction
+#     if dataset == "nsl":
+#         results = analyzer.batch_predict_nsl(df)
+#     elif dataset == "ton":
+#         results = analyzer.batch_predict_ton(df)
+#     elif dataset == "bot":
+#         results = analyzer.batch_predict_bot(df)
+#     else:
+#         return {"error": "Invalid dataset"}
+#     bulk_docs = []
+
+#     # 2️⃣ Select suspicious rows for SHAP
+#     attack_rows = [
+#         (i, r["confidence"])
+#         for i, r in enumerate(results)
+#         if r["prediction"].lower() != "normal"
+#     ]
+
+#     attack_rows = sorted(attack_rows, key=lambda x: x[1], reverse=True)
+
+#     suspicious_indices = [i for i, _ in attack_rows[:5]]
+
+#     # Limit to top 5 only
+#     suspicious_indices = suspicious_indices[:5]
+
+#     for i, row in df.iterrows():
+#         explanation_text = (
+#             "✅ This traffic instance aligns with normal network behaviour patterns. "
+#             "No significant threat indicators were identified."
+#         )
+
+#         # 3️⃣ Run SHAP only for selected rows
+#         if i in suspicious_indices:
+
+#             # 🔹 Prepare input correctly based on dataset
+#             if dataset == "nsl":
+#                 X_shap = analyzer._prepare_nsl_for_shap(row)
+#                 pred_idx = analyzer.nsl_classes.index(results[i]["prediction"])
+
+#             elif dataset == "ton":
+#                 X_shap = analyzer._prepare_ton_for_shap(row)
+#                 pred_idx = list(analyzer.ton_classes).index(
+#                     results[i]["prediction"].lower()
+#                 )
+
+#             elif dataset == "bot":
+#                 X_shap = analyzer._prepare_bot_for_shap(row)
+#                 pred_idx = analyzer.bot_classes.index(results[i]["prediction"])
+
+#             # 🔹 Now safe SHAP call
+#             explanation_text = analyzer._get_shap_explanation(
+#                 X_shap, dataset, predicted_class=pred_idx, top_k=5
+#             )
+
+#         bulk_docs.append(
+#             {
+#                 "timestamp": datetime.utcnow().isoformat() + "Z",
+#                 "dataset": dataset,
+#                 "prediction": results[i]["prediction"],
+#                 "confidence": results[i]["confidence"],
+#                 "risk_level": results[i]["risk_level"],
+#                 "explanation": explanation_text,
+#                 "input_features": row.to_dict(),
+#             }
+#         )
+
+#     collection.insert_many(bulk_docs)
+
+#     return {
+#         "total_rows": len(results),
+#         "xai_rows": len(suspicious_indices),
+#         "message": "Batch processed with selective XAI.",
+#     }
 @app.post("/predict-file/{dataset}")
 async def predict_file(dataset: str, file: UploadFile = File(...)):
     df = pd.read_csv(file.file)
@@ -126,32 +203,20 @@ async def predict_file(dataset: str, file: UploadFile = File(...)):
         results = analyzer.batch_predict_bot(df)
     else:
         return {"error": "Invalid dataset"}
+
     bulk_docs = []
 
-    # 2️⃣ Select suspicious rows for SHAP
-    attack_rows = [
-        (i, r["confidence"])
-        for i, r in enumerate(results)
-        if r["prediction"].lower() != "normal"
-    ]
-
-    attack_rows = sorted(attack_rows, key=lambda x: x[1], reverse=True)
-
-    suspicious_indices = [i for i, _ in attack_rows[:5]]
-
-    # Limit to top 5 only
-    suspicious_indices = suspicious_indices[:5]
-
     for i, row in df.iterrows():
+
+        # Default explanation for normal
         explanation_text = (
             "✅ This traffic instance aligns with normal network behaviour patterns. "
             "No significant threat indicators were identified."
         )
 
-        # 3️⃣ Run SHAP only for selected rows
-        if i in suspicious_indices:
+        # 🔥 Generate SHAP for ALL attack rows (not limited to 5)
+        if results[i]["prediction"].lower() != "normal":
 
-            # 🔹 Prepare input correctly based on dataset
             if dataset == "nsl":
                 X_shap = analyzer._prepare_nsl_for_shap(row)
                 pred_idx = analyzer.nsl_classes.index(results[i]["prediction"])
@@ -166,7 +231,6 @@ async def predict_file(dataset: str, file: UploadFile = File(...)):
                 X_shap = analyzer._prepare_bot_for_shap(row)
                 pred_idx = analyzer.bot_classes.index(results[i]["prediction"])
 
-            # 🔹 Now safe SHAP call
             explanation_text = analyzer._get_shap_explanation(
                 X_shap, dataset, predicted_class=pred_idx, top_k=5
             )
@@ -187,10 +251,9 @@ async def predict_file(dataset: str, file: UploadFile = File(...)):
 
     return {
         "total_rows": len(results),
-        "xai_rows": len(suspicious_indices),
-        "message": "Batch processed with selective XAI.",
+        "xai_rows": len(bulk_docs),   # now all rows processed
+        "message": "Batch processed with full XAI for attacks.",
     }
-
 
 # @app.post("/predict-file/{dataset}")
 # async def predict_file(
