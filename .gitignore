@@ -12,11 +12,17 @@ outputs/
 # Jupyter checkpoints
 .ipynb_checkpoints/
 
-# Model files
+outputs/*
+!outputs/models/
+
 *.pkl
 *.keras
 *.h5
 *.npy
+!outputs/models/**/*.pkl
+!outputs/models/**/*.keras
+!outputs/models/**/*.h5
+!outputs/models/**/*.npy
 
 # OS files
 .DS_Store
