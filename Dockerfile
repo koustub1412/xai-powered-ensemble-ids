@@ -22,8 +22,7 @@ COPY backend/ /app/
 
 # Copy model folders
 COPY outputs/ /app/outputs/
-COPY TON/ /app/TON/
-COPY bot/ /app/bot/
+
 
 # Switch to non-root user
 USER user
