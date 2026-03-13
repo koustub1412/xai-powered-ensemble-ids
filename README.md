@@ -1,3 +1,12 @@
+---
+title: XAI Powered Ensemble IDS
+emoji: 🛡️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: backend/app.py
+pinned: false
+---
 # 🔐 XAI-Powered Ensemble Intrusion Detection System for IoT
 
 ## 📌 Overview
