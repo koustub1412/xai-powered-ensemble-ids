@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "https://koustub14-xai-powered-ensemble-ids.hf.space";
 
 function App() {
   const [enableXAI, setEnableXAI] = useState(true);
