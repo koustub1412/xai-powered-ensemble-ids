@@ -478,7 +478,10 @@ import os
 class MultiDatasetThreatAnalyzer:
     def __init__(self):
         print("🚀 Starting the Context-Aware Multi-Model Manager...")
-        self.base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        self.base_dir = os.environ.get(
+            "MODEL_BASE_DIR",
+            os.path.abspath(os.path.join(os.path.dirname(__file__), "..")),
+        )
 
         # Initialize loaders for all expert frameworks
         self._load_nsl_kdd()  # Keras Framework
