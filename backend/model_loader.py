@@ -472,12 +472,14 @@ import tensorflow as tf
 import shap
 from fastapi import UploadFile, File
 import pandas as pd
+import os
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 class MultiDatasetThreatAnalyzer:
     def __init__(self):
         print("🚀 Starting the Context-Aware Multi-Model Manager...")
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.base_dir = BASE_DIR
 
         # Initialize loaders for all expert frameworks
         self._load_nsl_kdd()  # Keras Framework
