@@ -64,53 +64,66 @@ function App() {
   const file = event.target.files[0];
   if (!file) return;
 
-  // 🔒 File type validation
-  const isCSV = file.name.toLowerCase().endsWith(".csv") ||file.type === "text/csv" ||file.type === "application/vnd.ms-excel";
+  // 🔒 File type validation (KEEP AS IT IS)
+  const isCSV =
+    file.name.toLowerCase().endsWith(".csv") ||
+    file.type === "text/csv" ||
+    file.type === "application/vnd.ms-excel";
 
   if (!isCSV) {
-    alert("⚠️ Invalid file type detected.\nOnly CSV datasets are accepted by this IDS pipeline.\nPlease upload a valid .csv file.");
-    event.target.value = ""; // Reset the input so the same file can be re-selected later
+    alert(
+      "⚠️ Invalid file type detected.\nOnly CSV datasets are accepted by this IDS pipeline.\nPlease upload a valid .csv file."
+    );
+    event.target.value = "";
     return;
   }
 
   console.log("FILE SELECTED:", file.name);
 
-    const formData = new FormData();
-    formData.append("file", file); // 🔥 append first
+  const formData = new FormData();
+  formData.append("file", file);
 
-    try {
-      const response = await axios.post(`${API_BASE}/predict-file`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+  try {
+    const response = await axios.post(`${API_BASE}/predict-file`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
 
-      setDetectedDataset(response.data.dataset_detected);
+    const detected = response.data.dataset_detected;
 
-      fetchStats();
-      fetchHistory();
-      if (response.data.dataset_detected === "unknown") {
-  alert("⚠️ Dataset not recognized. Please upload a valid dataset.");
-  return;
-}
-      alert("CSV Uploaded Successfully!");
-    }catch (error) {
-  console.error(error);
+    // 🔴 VERY IMPORTANT: CHECK FIRST
+    if (detected === "unknown") {
+      alert("⚠️ Dataset not recognized. Please upload a valid dataset.");
+      event.target.value = "";
+      return;
+    }
 
-  // Extract backend error detail if available
-  const detail = error?.response?.data?.detail;
+    // ✅ ONLY run if valid dataset
+    setDetectedDataset(detected);
+    fetchStats();
+    fetchHistory();
 
-  if (error?.response?.status === 422 && detail) {
-    alert(
-      `⚠️ Unrecognized Dataset Schema\n\n${detail}\n\nSupported datasets: NSL-KDD · ToN-IoT · BoT-IoT`
-    );
-  } else if (error?.response?.status === 415) {
-    alert("⚠️ Invalid file type. Only CSV files are accepted by this IDS pipeline.");
-  } else {
-    alert("❌ CSV Upload Failed. Check the console for details.");
+    alert("CSV Uploaded Successfully!");
+
+  } catch (error) {
+    console.error(error);
+
+    const detail = error?.response?.data?.detail;
+
+    if (error?.response?.status === 422 && detail) {
+      alert(
+        `⚠️ Unrecognized Dataset Schema\n\n${detail}\n\nSupported datasets: NSL-KDD · ToN-IoT · BoT-IoT`
+      );
+    } else if (error?.response?.status === 415) {
+      alert(
+        "⚠️ Invalid file type. Only CSV files are accepted by this IDS pipeline."
+      );
+    } else {
+      alert("❌ CSV Upload Failed. Check the console for details.");
+    }
+
+    event.target.value = "";
   }
-
-  event.target.value = ""; // Reset input so user can try again
-}
-  };
+};
   const jitter = (value, percent = 0.15) => {
   const delta = value * percent;
   return Math.max(0, value + (Math.random() * 2 - 1) * delta);
