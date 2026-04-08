@@ -232,9 +232,15 @@ async def predict_file(file: UploadFile = File(...)):
     print("Detected dataset:", dataset)
 
     if dataset == "unknown":
-        return {"status": "error",
-        "message": "Unsupported dataset uploaded."
-        }
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Dataset schema not recognized. The uploaded CSV does not match "
+                "any supported feature signature (NSL-KDD, ToN-IoT, or BoT-IoT). "
+                "Ensure the file contains the correct column headers for one of the "
+                "three supported benchmark datasets."
+            )
+        )
 
     bulk_docs = []
     attack_count = 0
