@@ -59,12 +59,21 @@ function App() {
   };
 
   const handleCSVUpload = async (event) => {
-    console.log("UPLOAD TRIGGERED");
+  console.log("UPLOAD TRIGGERED");
 
-    const file = event.target.files[0];
-    if (!file) return;
+  const file = event.target.files[0];
+  if (!file) return;
 
-    console.log("FILE SELECTED:", file.name);
+  // 🔒 File type validation
+  const isCSV = file.name.toLowerCase().endsWith(".csv") ||file.type === "text/csv" ||file.type === "application/vnd.ms-excel";
+
+  if (!isCSV) {
+    alert("⚠️ Invalid file type detected.\nOnly CSV datasets are accepted by this IDS pipeline.\nPlease upload a valid .csv file.");
+    event.target.value = ""; // Reset the input so the same file can be re-selected later
+    return;
+  }
+
+  console.log("FILE SELECTED:", file.name);
 
     const formData = new FormData();
     formData.append("file", file); // 🔥 append first
@@ -80,10 +89,25 @@ function App() {
       fetchHistory();
 
       alert("CSV Uploaded Successfully!");
-    } catch (error) {
-      console.error(error);
-      alert("CSV Upload Failed!");
-    }
+    // REPLACE WITH
+} catch (error) {
+  console.error(error);
+
+  // Extract backend error detail if available
+  const detail = error?.response?.data?.detail;
+
+  if (error?.response?.status === 422 && detail) {
+    alert(
+      `⚠️ Unrecognized Dataset Schema\n\n${detail}\n\nSupported datasets: NSL-KDD · ToN-IoT · BoT-IoT`
+    );
+  } else if (error?.response?.status === 415) {
+    alert("⚠️ Invalid file type. Only CSV files are accepted by this IDS pipeline.");
+  } else {
+    alert("❌ CSV Upload Failed. Check the console for details.");
+  }
+
+  event.target.value = ""; // Reset input so user can try again
+}
   };
   const jitter = (value, percent = 0.15) => {
   const delta = value * percent;
@@ -406,7 +430,7 @@ function App() {
             📂 Upload CSV
             <input
               type="file"
-              accept=".csv"
+              accept=".csv,text/csv"
               style={{ display: "none" }}
               onChange={handleCSVUpload}
             />

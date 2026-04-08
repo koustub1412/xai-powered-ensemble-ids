@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Form
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, Form,HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from schemas import NetworkTraffic
 from predictor import predict_single
@@ -211,7 +211,20 @@ def detect_dataset_type(columns):
 
 @app.post("/predict-file")
 async def predict_file(file: UploadFile = File(...)):
+# 🔒 Validate file type — reject anything that isn't CSV
+    allowed_types = {"text/csv", "application/vnd.ms-excel", "text/plain"}
+    is_csv_name = file.filename.lower().endswith(".csv")
+    is_csv_mime = file.content_type in allowed_types
 
+    if not is_csv_name or not is_csv_mime:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"Unsupported file type '{file.content_type}'. "
+                "This endpoint only accepts CSV-formatted network traffic datasets (.csv). "
+                "Please upload a valid NSL-KDD, ToN-IoT, or BoT-IoT CSV file."
+            )
+        )
     df = pd.read_csv(file.file)
 
     # 🔍 Detect dataset automatically
@@ -219,7 +232,9 @@ async def predict_file(file: UploadFile = File(...)):
     print("Detected dataset:", dataset)
 
     if dataset == "unknown":
-        return {"error": "Unsupported dataset detected"}
+        return {"status": "error",
+        "message": "Unsupported dataset uploaded."
+        }
 
     bulk_docs = []
     attack_count = 0
