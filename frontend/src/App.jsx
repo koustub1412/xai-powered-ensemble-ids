@@ -87,10 +87,12 @@ function App() {
 
       fetchStats();
       fetchHistory();
-
+      if (response.data.dataset_detected === "unknown") {
+  alert("⚠️ Dataset not recognized. Please upload a valid dataset.");
+  return;
+}
       alert("CSV Uploaded Successfully!");
-    // REPLACE WITH
-} catch (error) {
+    }catch (error) {
   console.error(error);
 
   // Extract backend error detail if available
