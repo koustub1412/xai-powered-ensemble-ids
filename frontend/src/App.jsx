@@ -84,25 +84,26 @@ function App() {
   formData.append("file", file);
 
   try {
-    const response = await axios.post(`${API_BASE}/predict-file`, formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    // REPLACE WITH
+const response = await axios.post(`${API_BASE}/predict-file`, formData, {
+  headers: { "Content-Type": "multipart/form-data" },
+});
 
-    const detected = response.data.dataset_detected;
+// Guard: backend returns 200 with error key for unknown datasets
+if (response.data.error || response.data.dataset_detected === "unknown") {
+  alert(
+    "⚠️ Unrecognized Dataset Schema\n\n" +
+    "The uploaded CSV does not match any supported feature signature.\n\n" +
+    "Supported datasets: NSL-KDD · ToN-IoT · BoT-IoT"
+  );
+  event.target.value = "";
+  return;  // ← stops execution, no success alert
+}
 
-    // 🔴 VERY IMPORTANT: CHECK FIRST
-    if (detected === "unknown") {
-      alert("⚠️ Dataset not recognized. Please upload a valid dataset.");
-      event.target.value = "";
-      return;
-    }
-
-    // ✅ ONLY run if valid dataset
-    setDetectedDataset(detected);
-    fetchStats();
-    fetchHistory();
-
-    alert("CSV Uploaded Successfully!");
+setDetectedDataset(response.data.dataset_detected);
+fetchStats();
+fetchHistory();
+alert("✅ CSV Uploaded Successfully!");
 
   } catch (error) {
     console.error(error);
